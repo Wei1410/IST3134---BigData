@@ -1,74 +1,7 @@
 """
 IST3134 Big Data Analytics - Group Assignment
-Spark (Big Data) equivalent of plain_parking_random_forest.py — built to run
-via spark-submit on Amazon EMR, reading input from S3.
-
-Same research question, same 9 features, same target construction (top 8
-violation codes + "OTHER") as the Naive Bayes Spark script - the only thing
-that's changed is the algorithm: Random Forest instead of Naive Bayes, to
-match the plain-Python Random Forest baseline. Run this against the SAME
-dataset as spark_parking_naive_bayes_emr.py and plain_parking_random_forest.py
-so all the timing/accuracy numbers are directly comparable.
-
-Results (accuracy, F1, timings, etc.) print straight to the console/logs —
-nothing is written to S3 or anywhere else.
-
-============================== YOUR S3 SETUP ==============================
-
 Input dataset folder : s3://chenwei-asg/Dataset/
 
-This is already set as the default in the CONFIG section below, so you can
-just run the script with no arguments once your CSV is in that Dataset
-folder. You can still override it from the command line if needed (see
-"HOW TO RUN ON EMR").
-
-On EMR specifically, s3:// paths work with Spark out of the box (no extra
-JARs or config) — EMR ships with the S3 connector pre-installed.
-
-============================== UPLOADING YOUR DATASET TO S3 ==============================
-
-Two ways to get your CSV into s3://chenwei-asg/Dataset/ before running this:
-
-OPTION A — AWS CLI (simplest, run once from wherever the file currently
-sits — your own machine, or the EMR master node after you scp'd it there):
-
-    aws s3 cp parking_violations.csv s3://chenwei-asg/Dataset/
-
-OPTION B — let this script do it for you. Set LOCAL_CSV_TO_UPLOAD below to
-the local path of your CSV (e.g. on the EMR master node's disk); the
-upload_local_file_to_s3() function will upload it to INPUT_PATH via boto3
-before Spark reads anything. Leave LOCAL_CSV_TO_UPLOAD as None if the file
-is already sitting in the bucket (boto3 is pre-installed on EMR and
-automatically uses the cluster's IAM role — no access keys to configure).
-
-============================== HOW TO RUN ON EMR ==============================
-
-1. Upload this script to S3 too, e.g.:
-     s3://chenwei-asg/scripts/spark_parking_random_forest_emr.py
-
-2. Make sure your dataset CSV is in s3://chenwei-assignment/Dataset/ (see above).
-
-3. Submit the job. Either as an EMR Step from the AWS Console:
-     EMR -> your cluster -> Steps -> Add step
-       Step type: Spark application
-       Application location: s3://chenwei-asg/scripts/spark_parking_random_forest_emr.py
-
-   Or via SSH into the cluster's primary (master) node:
-     spark-submit s3://chenwei-asg/scripts/spark_parking_random_forest_emr.py
-
-   To override the input path from the command line instead of editing the
-   CONFIG section:
-     spark-submit spark_parking_random_forest_emr.py s3://other-bucket/in/
-
-4. Do NOT hardcode --master in this script (it deliberately doesn't call
-   .master(...) below) - EMR's spark-submit sets the cluster master (YARN)
-   automatically.
-
-============================== TO TEST LOCALLY FIRST (recommended) ==============================
-
-    pip install pyspark boto3
-    spark-submit --master local[*] spark_parking_random_forest_emr.py /local/path/to/sample.csv
-================================================================================================
 """
 
 import os
@@ -85,25 +18,18 @@ from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler, In
 from pyspark.ml.classification import RandomForestClassifier
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 
-# ============================================================================
-# CONFIG
-# ============================================================================
+
 INPUT_PATH = sys.argv[1] if len(sys.argv) > 1 else "s3://chenwei-assignment/Dataset/"
 
-# Set this to a local file path (e.g. "/home/hadoop/parking_violations.csv")
-# if your dataset still needs uploading to S3. Leave as None if it's
-# already sitting in INPUT_PATH.
+
 LOCAL_CSV_TO_UPLOAD = None
 
 TOP_N_CLASSES = 8
 CURRENT_YEAR = 2026
 
-N_TREES = 20                # same as N_ESTIMATORS in the plain-Python version
-MAX_DEPTH = 8                # Spark requires an actual integer here (max allowed is 30) -
-                               # unlike sklearn's MAX_DEPTH=None (unbounded), so this isn't
-                               # a perfectly identical setting between the two scripts; a
-                               # depth of 8 is a reasonable middle ground worth noting as a
-                               # methodological difference in your report if you compare them.
+N_TREES = 20                
+MAX_DEPTH = 8               
+                               
 
 CATEGORICAL_FEATURES = [
     "Registration State",
@@ -116,7 +42,6 @@ CATEGORICAL_FEATURES = [
     "Unregistered Vehicle?",
     "Violation Precinct",
 ]
-# ============================================================================
 
 
 def upload_local_file_to_s3(local_path, s3_folder_uri):
@@ -198,30 +123,22 @@ clean_categorical_udf = udf(clean_categorical, StringType())
 
 
 def main():
-    # Starts before the SparkSession itself, so this covers Spark startup
-    # too - the true end-to-end runtime of the whole script.
+   
     run_start = time.time()
 
-    # No .master(...) call here on purpose - see the header comment above.
+    
     spark = SparkSession.builder.appName("IST3134-ParkingRandomForest-EMR").getOrCreate()
     sc = spark.sparkContext
     sc.setLogLevel("WARN")
 
     t0 = time.time()
 
-    # ------------------------------------------------------------------
-    # (Optional) Upload the dataset to S3 first, then load it.
-    # ------------------------------------------------------------------
+   
     input_path = INPUT_PATH
     if LOCAL_CSV_TO_UPLOAD:
         input_path = upload_local_file_to_s3(LOCAL_CSV_TO_UPLOAD, INPUT_PATH)
 
-    # Deliberately NOT using .option("inferSchema", "true") here - on a
-    # large dataset that forces Spark to scan the whole file once just to
-    # guess column types, then read it a second time to actually load it,
-    # doubling the read cost. Every column loads as a string instead, and
-    # the one column that actually needs to be numeric (Violation Code) is
-    # cast explicitly a few lines down.
+    
     df = (
         spark.read.format("csv")
         .option("header", "true")
@@ -235,16 +152,15 @@ def main():
     df = df.withColumn("violation_code", col("Violation Code").cast(IntegerType()))
     df = df.filter(col("violation_code").isNotNull())
 
-    # MAP: derive the same two engineered buckets as the plain-Python version.
+   
     df = df.withColumn("violation_hour_bucket", hour_bucket_udf(col("Violation Time")))
     df = df.withColumn("vehicle_year_bucket", year_bucket_udf(col("Vehicle Year")))
 
-    # Same cleanup as clean_categorical() in the plain-Python version.
+   
     for c in CATEGORICAL_FEATURES:
         df = df.withColumn(c, clean_categorical_udf(col(c)))
 
-    # Build the target: TOP_N_CLASSES most frequent codes + "OTHER" - same
-    # rule as the plain-Python version.
+    
     top_codes = (
         df.groupBy("violation_code")
         .count()
@@ -269,19 +185,14 @@ def main():
         spark.stop()
         return
 
-    # Majority-class baseline, same sanity check as the plain-Python version.
+   
     top_class_count = df.groupBy("target_label").count().agg({"count": "max"}).collect()[0][0]
     majority_baseline = top_class_count / n_rows
     print(f"Majority-class baseline accuracy: {majority_baseline:.4f}")
 
     feature_cols = CATEGORICAL_FEATURES + ["violation_hour_bucket", "vehicle_year_bucket"]
 
-    # One-hot encode the categorical features. Random Forest doesn't
-    # strictly need one-hot encoding the way Naive Bayes does - Spark trees
-    # can split on category indices directly via VectorIndexer - but this
-    # keeps the exact same feature representation as the Naive Bayes Spark
-    # script AND the plain-Python Random Forest script, so all three are
-    # compared on identical inputs, not just the same raw columns.
+    # One-hot encode 
     indexers = [
         StringIndexer(inputCol=c, outputCol=f"{c}_idx", handleInvalid="keep")
         for c in feature_cols
@@ -313,14 +224,7 @@ def main():
     feat_prep_time = time.time() - t0
 
     t1 = time.time()
-    # REDUCE (distributed training): Spark builds each tree by repeatedly
-    # choosing the best split at each node. To do that across a cluster, it
-    # has every partition compute local statistics (feature-value counts
-    # per class) for the candidate splits it holds - a map step - then
-    # aggregates those into global split-quality statistics - a reduce step
-    # - before picking the winning split. That map/aggregate cycle repeats
-    # level-by-level down the tree, for all N_TREES trees, spread across
-    # the cluster's executors on EMR.
+   
     model = pipeline.fit(train_df)
     train_time = time.time() - t1
 
@@ -358,12 +262,9 @@ def main():
     print(f"Test weighted precision  : {precision:.4f}")
     print(f"Test weighted recall     : {recall:.4f}")
 
-    # ------------------------------------------------------------------
-    # FINAL ANALYSIS - same sections as the Naive Bayes Spark script and
-    # the plain-Python Random Forest script, so all reports read the same
-    # way side by side.
-    # ------------------------------------------------------------------
-    label_indexer_model = model.stages[-2]  # the fitted StringIndexer for target_label
+   
+    # FINAL ANALYSIS 
+    label_indexer_model = model.stages[-2] 
     index_to_label = IndexToString(
         inputCol="prediction", outputCol="predicted_label", labels=label_indexer_model.labels
     )
@@ -397,13 +298,7 @@ def main():
         .show(20, truncate=False)
     )
 
-    # ------------------------------------------------------------------
-    # BONUS (Random Forest only - Naive Bayes doesn't offer this): feature
-    # importances, showing which inputs the model actually relied on most.
-    # Spark stores feature names as metadata on the assembled "features"
-    # vector column (populated automatically by OneHotEncoder), which is
-    # how we can map importance scores back to readable names below.
-    # ------------------------------------------------------------------
+   
     print("================ TOP 10 FEATURE IMPORTANCES ================")
     rf_model = model.stages[-1]
     attrs = predictions.schema["features"].metadata["ml_attr"]["attrs"]
