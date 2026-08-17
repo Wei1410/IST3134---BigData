@@ -13,8 +13,8 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 
-CSV_PATH = r"C:\Users\Chen Wei\Desktop\Uni Degree\Y3S2\IST3134 - Big Data Analytics\GrpAsg\ParkingTicket\Parking_Violations_Issued_-_Fiscal_Year_2015.csv"   # <-- put the path to your downloaded CSV here
-TOP_N_CLASSES = 8                      # number of most-frequent violation codes kept as their own class
+CSV_PATH = r"C:\Users\Chen Wei\Desktop\Uni Degree\Y3S2\IST3134 - Big Data Analytics\GrpAsg\ParkingTicket\Parking_Violations_Issued_-_Fiscal_Year_2015.csv"  
+TOP_N_CLASSES = 8                      
 CURRENT_YEAR = 2026
 
 
