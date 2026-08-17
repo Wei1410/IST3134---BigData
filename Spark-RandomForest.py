@@ -45,13 +45,7 @@ CATEGORICAL_FEATURES = [
 
 
 def upload_local_file_to_s3(local_path, s3_folder_uri):
-    """Uploads a local file to an S3 folder (e.g. from the EMR master
-    node's local disk) before Spark reads it. Uses boto3, which is
-    pre-installed on EMR and automatically picks up the cluster's IAM
-    role credentials - no access keys need to be configured.
-
-    Returns the full s3:// URI of the uploaded object.
-    """
+ 
     parsed = urlparse(s3_folder_uri)
     bucket = parsed.netloc
     folder_key = parsed.path.lstrip("/").rstrip("/")
@@ -64,9 +58,7 @@ def upload_local_file_to_s3(local_path, s3_folder_uri):
 
 
 def parse_hour_bucket(violation_time):
-    """Identical logic to the plain-Python version: Violation Time is
-    encoded like '0813A' / '1245P' (HHMM + AM/PM letter) -> 4 time-of-day
-    buckets, 'UNKNOWN' for anything blank/malformed."""
+   
     if violation_time is None:
         return "UNKNOWN"
     s = violation_time.strip().upper()
@@ -90,8 +82,7 @@ def parse_hour_bucket(violation_time):
 
 
 def bucket_vehicle_year(year):
-    """Identical logic to the plain-Python version: bucket into decades,
-    'UNKNOWN' for anything missing or implausible (0, blank, 2099, etc.)."""
+   
     try:
         y = int(float(year))
     except (TypeError, ValueError):
@@ -111,7 +102,7 @@ def bucket_vehicle_year(year):
 
 
 def clean_categorical(value):
-    """Identical logic to the plain-Python version: blank/null -> 'UNKNOWN'."""
+   
     if value is None or value.strip() == "":
         return "UNKNOWN"
     return value.strip()
@@ -250,7 +241,7 @@ def main():
 
     total_time = time.time() - t0
 
-    print("\n================ SPARK RANDOM FOREST - PARKING VIOLATIONS RESULTS ================")
+    print("SPARK RANDOM FOREST - PARKING VIOLATIONS RESULTS")
     print(f"Rows used                : {n_rows}")
     print(f"Trees / max depth        : {N_TREES} / {MAX_DEPTH}")
     print(f"Majority-class baseline  : {majority_baseline:.4f}")
@@ -270,7 +261,7 @@ def main():
     )
     predictions_readable = index_to_label.transform(predictions)
 
-    print("\n================ SAMPLE PREDICTIONS ================")
+    print("SAMPLE PREDICTIONS")
     print("Vehicle/ticket characteristics alongside the ACTUAL vs PREDICTED violation category:\n")
     (
         predictions_readable.select(
@@ -285,7 +276,7 @@ def main():
         ).show(20, truncate=False)
     )
 
-    print("================ PER-CLASS ACCURACY (which violation types predict well?) ================")
+    print("PER-CLASS ACCURACY (which violation types predict well?)")
     (
         predictions_readable.withColumn(
             "correct", (col("target_label") == col("predicted_label")).cast("int")
@@ -299,7 +290,7 @@ def main():
     )
 
    
-    print("================ TOP 10 FEATURE IMPORTANCES ================")
+    print(" TOP 10 FEATURE IMPORTANCES")
     rf_model = model.stages[-1]
     attrs = predictions.schema["features"].metadata["ml_attr"]["attrs"]
     feature_names = [None] * rf_model.numFeatures
