@@ -248,7 +248,7 @@ def main():
     )
     predictions_readable = index_to_label.transform(predictions)
 
-    print("SAMPLE PREDICTIONS")
+    print("\n SAMPLE PREDICTIONS")
     print("Vehicle/ticket characteristics alongside the ACTUAL vs PREDICTED violation category:\n")
     (
         predictions_readable.select(
@@ -263,7 +263,7 @@ def main():
         ).show(20, truncate=False)
     )
 
-    print(" PER-CLASS ACCURACY (which violation types predict well?)")
+    print("\n PER-CLASS ACCURACY (which violation types predict well?)")
     (
         predictions_readable.withColumn(
             "correct", (col("target_label") == col("predicted_label")).cast("int")
