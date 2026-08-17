@@ -230,7 +230,7 @@ def main():
 
     total_time = time.time() - t0
 
-    print("\n================ SPARK NAIVE BAYES - PARKING VIOLATIONS RESULTS ================")
+    print("SPARK NAIVE BAYES - PARKING VIOLATIONS RESULTS")
     print(f"Rows used                : {n_rows}")
     print(f"Majority-class baseline  : {majority_baseline:.4f}")
     print(f"Feature prep time        : {feat_prep_time:.2f} s")
@@ -248,7 +248,7 @@ def main():
     )
     predictions_readable = index_to_label.transform(predictions)
 
-    print("\n================ SAMPLE PREDICTIONS ================")
+    print("SAMPLE PREDICTIONS")
     print("Vehicle/ticket characteristics alongside the ACTUAL vs PREDICTED violation category:\n")
     (
         predictions_readable.select(
@@ -263,7 +263,7 @@ def main():
         ).show(20, truncate=False)
     )
 
-    print("================ PER-CLASS ACCURACY (which violation types predict well?) ================")
+    print(" PER-CLASS ACCURACY (which violation types predict well?)")
     (
         predictions_readable.withColumn(
             "correct", (col("target_label") == col("predicted_label")).cast("int")
